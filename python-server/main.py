@@ -7,7 +7,7 @@ import base64
 from ultralytics import YOLO
 
 # DroidCam URL - adjust the IP and port to match your setup
-DROIDCAM_URL = "http://192.168.68.171:4747/video"
+DROIDCAM_URL = "http://192.168.68.158:4747/video"
 
 app = FastAPI()
 
