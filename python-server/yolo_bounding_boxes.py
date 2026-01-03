@@ -2,6 +2,7 @@ import os
 import cv2
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 import threading
 import time
 import base64
@@ -51,6 +52,15 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/get-frame")
 def get_frame():
@@ -143,6 +153,42 @@ def detect():
         "persons": bounding_boxes,
         "person_count": len(bounding_boxes)
     })
+
+@app.get("/analytics")
+def analytics():
+    """Return analytics data including people count and density"""
+    with frame_lock:
+        if current_frame is None:
+            return JSONResponse(content={"error": "No frame available"}, status_code=503)
+        
+        frame = current_frame.copy()
+    
+    # Run YOLO detection
+    results = model(frame, verbose=False)
+    
+    # Extract person detections (class 0 is 'person' in COCO)
+    person_count = 0
+    for result in results:
+        for box in result.boxes:
+            if int(box.cls[0]) == 0:  # person class
+                person_count += 1
+    
+    # Calculate density based on frame area and person count
+    # Frame area in pixels
+    frame_height, frame_width = frame.shape[:2]
+    frame_area = frame_height * frame_width
+    
+    # Assume each person needs ~10000 pixels of space for comfortable density
+    # Max capacity = frame_area / 10000
+    max_capacity = frame_area / 10000
+    density_percentage = min(100, int((person_count / max_capacity) * 100)) if max_capacity > 0 else 0
+    
+    return JSONResponse(content={
+        "people_count": person_count,
+        "density": density_percentage,
+        "timestamp": time.time()
+    })
+
 
 def generate_stream():
     """Generator function for MJPEG streaming"""

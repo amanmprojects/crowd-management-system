@@ -1,3 +1,4 @@
+import './globals.css';
 import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
 
 
