@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import VideoBox from './VideoBox';
+import EmergencyButton from './EmergencyButton';
 import {
     Shield,
     User,
@@ -21,7 +23,9 @@ import {
     Minimize,
     CheckCircle,
     Info,
-    LogOut
+    LogOut,
+    LayoutDashboard,
+    Map
 } from 'lucide-react';
 
 // Alert types and interface
@@ -144,10 +148,8 @@ export default function DashboardUI({ user }: { user?: any }) {
 
         const interval = setInterval(() => {
             if (Math.random() > 0.7) { // 30% chance of new alert
-                setAlerts(prev => {
-                    const newAlerts = generateMockAlerts().slice(0, 1);
-                    return [...newAlerts, ...prev].slice(0, 5);
-                });
+                const newAlert = generateMockAlerts()[0];
+                setAlerts(prev => [newAlert, ...prev].slice(0, 5));
             }
         }, 10000);
 
@@ -230,6 +232,9 @@ export default function DashboardUI({ user }: { user?: any }) {
     };
     return (
         <div className="min-h-screen bg-[#050b14] text-white font-sans selection:bg-cyan-500/30 overflow-hidden flex flex-col">
+            {/* Emergency Button */}
+            <EmergencyButton />
+
             {/* Header */}
             <header className="h-16 border-b border-cyan-900/30 bg-[#0a101f]/80 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-50">
                 <div className="flex items-center gap-3">
@@ -242,10 +247,28 @@ export default function DashboardUI({ user }: { user?: any }) {
                     </h1>
                 </div>
 
+                {/* Navigation */}
+                <nav className="flex items-center gap-1">
+                    <Link href="/dashboard" className="flex items-center gap-2 px-4 py-2 rounded-lg text-cyan-400 bg-cyan-500/10 border border-cyan-500/30">
+                        <LayoutDashboard className="w-4 h-4" />
+                        <span className="text-sm">Dashboard</span>
+                    </Link>
+                    <Link href="/heatmap" className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
+                        <Map className="w-4 h-4" />
+                        <span className="text-sm">Heat Map</span>
+                    </Link>
+                </nav>
+
                 <div className="flex items-center gap-6">
                     <div className="text-xs font-mono text-cyan-300/70 tracking-widest">
                         {currentDate} - {currentTime}
                     </div>
+
+                    {/* Notification Bell */}
+                    <div className="relative">
+                        <Bell className="w-5 h-5 text-cyan-500/70 hover:text-cyan-400 cursor-pointer transition-colors" />
+                    </div>
+
                     <div className="flex items-center gap-3 pl-6 border-l border-cyan-900/30 relative">
                         <div className="w-8 h-8 rounded-full bg-cyan-900/30 flex items-center justify-center border border-cyan-500/30">
                             <User className="w-4 h-4 text-cyan-400" />
