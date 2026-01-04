@@ -16,8 +16,9 @@ import {
 } from 'lucide-react';
 import HeatMapVisualization from './HeatMap';
 import EmergencyButton from './EmergencyButton';
+import { AppUser } from '@/lib/types';
 
-export default function HeatMapPage({ user }: { user?: any }) {
+export default function HeatMapPage({ user }: { user?: AppUser }) {
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false }));
 

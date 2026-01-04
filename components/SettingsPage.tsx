@@ -26,6 +26,7 @@ import {
     Video
 } from 'lucide-react';
 import EmergencyButton from './EmergencyButton';
+import { AppUser } from '@/lib/types';
 
 interface SettingsData {
     lowBandwidthMode: boolean;
@@ -45,7 +46,7 @@ const defaultSettings: SettingsData = {
     droidCamUrl: ''
 };
 
-export default function SettingsPage({ user }: { user?: any }) {
+export default function SettingsPage({ user }: { user?: AppUser }) {
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false }));
     const [settings, setSettings] = useState<SettingsData>(defaultSettings);
@@ -60,7 +61,7 @@ export default function SettingsPage({ user }: { user?: any }) {
         if (savedSettings) {
             try {
                 setSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) }));
-            } catch (e) {
+            } catch (_e) {
                 console.error('Failed to parse settings');
             }
         }
@@ -228,8 +229,8 @@ export default function SettingsPage({ user }: { user?: any }) {
                                 onClick={saveSettings}
                                 disabled={!hasChanges}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${hasChanges
-                                        ? 'bg-cyan-500 text-black hover:bg-cyan-400'
-                                        : 'bg-cyan-500/30 text-cyan-400/50 cursor-not-allowed'
+                                    ? 'bg-cyan-500 text-black hover:bg-cyan-400'
+                                    : 'bg-cyan-500/30 text-cyan-400/50 cursor-not-allowed'
                                     }`}
                             >
                                 {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}

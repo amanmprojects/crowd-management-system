@@ -32,6 +32,7 @@ import {
     X
 } from 'lucide-react';
 import EmergencyButton from './EmergencyButton';
+import { AppUser } from '@/lib/types';
 
 interface Incident {
     id: string;
@@ -60,7 +61,7 @@ interface DailyReport {
     totalVisitors: number;
 }
 
-export default function ReportsPage({ user }: { user?: any }) {
+export default function ReportsPage({ user }: { user?: AppUser }) {
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false }));
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -101,23 +102,22 @@ export default function ReportsPage({ user }: { user?: any }) {
                 const status = statuses[Math.floor(Math.random() * statuses.length)];
                 const hour = Math.floor(Math.random() * 14) + 6;
                 const minute = Math.floor(Math.random() * 60);
-                
+
                 return {
                     id: `INC-${String(i + 1).padStart(4, '0')}`,
                     timestamp: new Date(2026, 0, 4, hour, minute),
                     type,
                     category,
                     title: `${category} in ${zone}`,
-                    description: `${type === 'critical' ? 'URGENT: ' : ''}${category} detected in ${zone}. ${
-                        type === 'critical' 
-                            ? 'Immediate action required. Crowd density exceeded safe threshold.' 
-                            : type === 'warning'
-                                ? 'Situation requires monitoring. Staff alerted.'
-                                : 'Routine update. No immediate action needed.'
-                    }`,
+                    description: `${type === 'critical' ? 'URGENT: ' : ''}${category} detected in ${zone}. ${type === 'critical'
+                        ? 'Immediate action required. Crowd density exceeded safe threshold.'
+                        : type === 'warning'
+                            ? 'Situation requires monitoring. Staff alerted.'
+                            : 'Routine update. No immediate action needed.'
+                        }`,
                     zone,
                     status,
-                    responders: Array.from({ length: Math.floor(Math.random() * 3) + 1 }, () => 
+                    responders: Array.from({ length: Math.floor(Math.random() * 3) + 1 }, () =>
                         responderNames[Math.floor(Math.random() * responderNames.length)]
                     ),
                     duration: Math.floor(Math.random() * 45) + 5,
@@ -148,7 +148,7 @@ export default function ReportsPage({ user }: { user?: any }) {
     const filteredIncidents = incidents.filter(incident => {
         if (filterType !== 'all' && incident.type !== filterType) return false;
         if (filterStatus !== 'all' && incident.status !== filterStatus) return false;
-        if (searchQuery && !incident.title.toLowerCase().includes(searchQuery.toLowerCase()) && 
+        if (searchQuery && !incident.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
             !incident.zone.toLowerCase().includes(searchQuery.toLowerCase()) &&
             !incident.id.toLowerCase().includes(searchQuery.toLowerCase())) return false;
         return true;
@@ -374,7 +374,7 @@ export default function ReportsPage({ user }: { user?: any }) {
                             <Filter className="w-4 h-4 text-gray-500" />
                             <select
                                 value={filterType}
-                                onChange={(e) => setFilterType(e.target.value as any)}
+                                onChange={(e) => setFilterType(e.target.value as 'all' | 'critical' | 'warning' | 'info')}
                                 className="bg-[#0a101f] border border-cyan-900/30 rounded-lg px-4 py-2 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500/50"
                             >
                                 <option value="all">All Types</option>
@@ -387,7 +387,7 @@ export default function ReportsPage({ user }: { user?: any }) {
                         {/* Status Filter */}
                         <select
                             value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value as any)}
+                            onChange={(e) => setFilterStatus(e.target.value as 'all' | 'resolved' | 'pending' | 'investigating')}
                             className="bg-[#0a101f] border border-cyan-900/30 rounded-lg px-4 py-2 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500/50"
                         >
                             <option value="all">All Statuses</option>
@@ -406,10 +406,9 @@ export default function ReportsPage({ user }: { user?: any }) {
                         {filteredIncidents.map((incident) => (
                             <div
                                 key={incident.id}
-                                className={`bg-[#0a101f] rounded-xl border ${
-                                    incident.type === 'critical' ? 'border-red-500/30' :
+                                className={`bg-[#0a101f] rounded-xl border ${incident.type === 'critical' ? 'border-red-500/30' :
                                     incident.type === 'warning' ? 'border-yellow-500/30' : 'border-cyan-900/30'
-                                } overflow-hidden`}
+                                    } overflow-hidden`}
                             >
                                 {/* Incident Header */}
                                 <div
@@ -450,7 +449,7 @@ export default function ReportsPage({ user }: { user?: any }) {
                                             <div className="col-span-2">
                                                 <h4 className="text-xs font-medium text-gray-500 mb-2">DESCRIPTION</h4>
                                                 <p className="text-sm text-gray-300">{incident.description}</p>
-                                                
+
                                                 <h4 className="text-xs font-medium text-gray-500 mt-4 mb-2">ACTIONS TAKEN</h4>
                                                 <ul className="space-y-1">
                                                     {incident.actions.map((action, i) => (
@@ -502,8 +501,8 @@ export default function ReportsPage({ user }: { user?: any }) {
                                                         </div>
                                                     ))}
                                                 </div>
-                                                
-                                                <button 
+
+                                                <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handlePrintIncident(incident);
@@ -583,17 +582,15 @@ export default function ReportsPage({ user }: { user?: any }) {
                                     </div>
                                     <div>
                                         <span className="text-xs text-gray-500 uppercase">Type</span>
-                                        <p className={`font-bold uppercase ${
-                                            incidentToPrint.type === 'critical' ? 'text-red-600' :
+                                        <p className={`font-bold uppercase ${incidentToPrint.type === 'critical' ? 'text-red-600' :
                                             incidentToPrint.type === 'warning' ? 'text-yellow-600' : 'text-blue-600'
-                                        }`}>{incidentToPrint.type}</p>
+                                            }`}>{incidentToPrint.type}</p>
                                     </div>
                                     <div>
                                         <span className="text-xs text-gray-500 uppercase">Status</span>
-                                        <p className={`font-bold uppercase ${
-                                            incidentToPrint.status === 'resolved' ? 'text-green-600' :
+                                        <p className={`font-bold uppercase ${incidentToPrint.status === 'resolved' ? 'text-green-600' :
                                             incidentToPrint.status === 'pending' ? 'text-yellow-600' : 'text-purple-600'
-                                        }`}>{incidentToPrint.status}</p>
+                                            }`}>{incidentToPrint.status}</p>
                                     </div>
                                 </div>
                             </div>

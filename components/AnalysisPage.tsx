@@ -21,11 +21,11 @@ import {
     Activity,
     Target,
     Zap,
-    Calendar,
     ArrowUpRight,
     ArrowDownRight
 } from 'lucide-react';
 import EmergencyButton from './EmergencyButton';
+import { AppUser } from '@/lib/types';
 
 interface AnalyticsData {
     totalVisitors: number;
@@ -56,7 +56,7 @@ interface ZoneAnalysis {
     incidents: number;
 }
 
-export default function AnalysisPage({ user }: { user?: any }) {
+export default function AnalysisPage({ user }: { user?: AppUser }) {
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false }));
     const [selectedTimeRange, setSelectedTimeRange] = useState<'today' | 'week' | 'month'>('today');
@@ -235,11 +235,10 @@ export default function AnalysisPage({ user }: { user?: any }) {
                             <button
                                 key={range}
                                 onClick={() => setSelectedTimeRange(range)}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                                    selectedTimeRange === range
-                                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                                        : 'text-gray-400 hover:text-cyan-400'
-                                }`}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${selectedTimeRange === range
+                                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                                    : 'text-gray-400 hover:text-cyan-400'
+                                    }`}
                             >
                                 {range.charAt(0).toUpperCase() + range.slice(1)}
                             </button>
@@ -391,10 +390,9 @@ export default function AnalysisPage({ user }: { user?: any }) {
                                             <td className="py-3 px-4">
                                                 <div className="w-full bg-gray-700 rounded-full h-2">
                                                     <div
-                                                        className={`h-2 rounded-full ${
-                                                            zone.avgOccupancy > 70 ? 'bg-red-500' :
+                                                        className={`h-2 rounded-full ${zone.avgOccupancy > 70 ? 'bg-red-500' :
                                                             zone.avgOccupancy > 50 ? 'bg-yellow-500' : 'bg-green-500'
-                                                        }`}
+                                                            }`}
                                                         style={{ width: `${zone.avgOccupancy}%` }}
                                                     ></div>
                                                 </div>
@@ -425,7 +423,7 @@ export default function AnalysisPage({ user }: { user?: any }) {
                                     <TrendingUp className="w-5 h-5 text-cyan-400" />
                                     <span className="text-sm font-medium text-cyan-400">Visitor Surge Predicted</span>
                                 </div>
-                                <p className="text-xs text-gray-400">Weather conditions favorable. Expected 15% increase in visitors compared to last week's average.</p>
+                                <p className="text-xs text-gray-400">Weather conditions favorable. Expected 15% increase in visitors compared to last week&apos;s average.</p>
                             </div>
                             <div className="p-4 bg-gradient-to-r from-emerald-500/10 to-transparent rounded-lg border border-emerald-500/20">
                                 <div className="flex items-center gap-3 mb-2">
