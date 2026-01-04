@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import VideoBox from './VideoBox';
+import LowBandwidthView from './LowBandwidthView';
 import EmergencyButton from './EmergencyButton';
 import {
     Shield,
@@ -25,7 +26,10 @@ import {
     Info,
     LogOut,
     LayoutDashboard,
-    Map
+    Map,
+    BarChart3,
+    FileText,
+    WifiOff
 } from 'lucide-react';
 
 // Alert types and interface
@@ -85,8 +89,22 @@ export default function DashboardUI({ user }: { user?: any }) {
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false }));
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [isMainFeedExpanded, setIsMainFeedExpanded] = useState(false);
+    const [lowBandwidthMode, setLowBandwidthMode] = useState(false);
     
     const currentDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+
+    // Load settings from localStorage
+    useEffect(() => {
+        try {
+            const savedSettings = localStorage.getItem('crowdkavach_settings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                setLowBandwidthMode(settings.lowBandwidthMode || false);
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+        }
+    }, []);
 
     // Update current time every second
     useEffect(() => {
@@ -257,6 +275,18 @@ export default function DashboardUI({ user }: { user?: any }) {
                         <Map className="w-4 h-4" />
                         <span className="text-sm">Heat Map</span>
                     </Link>
+                    <Link href="/analysis" className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
+                        <BarChart3 className="w-4 h-4" />
+                        <span className="text-sm">Analysis</span>
+                    </Link>
+                    <Link href="/reports" className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
+                        <FileText className="w-4 h-4" />
+                        <span className="text-sm">Reports</span>
+                    </Link>
+                    <Link href="/settings" className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
+                        <Settings className="w-4 h-4" />
+                        <span className="text-sm">Settings</span>
+                    </Link>
                 </nav>
 
                 <div className="flex items-center gap-6">
@@ -313,7 +343,14 @@ export default function DashboardUI({ user }: { user?: any }) {
                             <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-20 bg-gradient-to-b from-black/60 to-transparent">
                                 <span className="text-xs font-bold text-cyan-400 tracking-wider flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-cyan-500/20 backdrop-blur-sm">
                                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-[pulse_1.5s_infinite]"></span>
-                                    CAM 1: MAIN PLAZA - LIVE (EXPANDED)
+                                    {lowBandwidthMode ? (
+                                        <>
+                                            <WifiOff className="w-3 h-3 text-amber-400" />
+                                            LOW BANDWIDTH MODE (EXPANDED)
+                                        </>
+                                    ) : (
+                                        'CAM 1: MAIN PLAZA - LIVE (EXPANDED)'
+                                    )}
                                 </span>
                                 <button
                                     onClick={() => setIsMainFeedExpanded(false)}
@@ -325,7 +362,11 @@ export default function DashboardUI({ user }: { user?: any }) {
                             </div>
 
                             <div className="flex-1 relative bg-black/50">
-                                <VideoBox className="w-full h-full" isPaused={!isLive} />
+                                {lowBandwidthMode ? (
+                                    <LowBandwidthView className="w-full h-full" isPaused={!isLive} />
+                                ) : (
+                                    <VideoBox className="w-full h-full" isPaused={!isLive} />
+                                )}
 
                                 {/* Corner brackets */}
                                 <div className="absolute top-4 left-4 w-12 h-12 border-t-2 border-l-2 border-cyan-500/50 rounded-tl-lg"></div>
@@ -378,17 +419,30 @@ export default function DashboardUI({ user }: { user?: any }) {
                         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-20 bg-gradient-to-b from-black/60 to-transparent">
                             <span className="text-xs font-bold text-cyan-400 tracking-wider flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-cyan-500/20 backdrop-blur-sm">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-[pulse_1.5s_infinite]"></span>
-                                CAM 1: MAIN PLAZA - LIVE
+                                {lowBandwidthMode ? (
+                                    <>
+                                        <WifiOff className="w-3 h-3 text-amber-400" />
+                                        LOW BANDWIDTH MODE
+                                    </>
+                                ) : (
+                                    'CAM 1: MAIN PLAZA - LIVE'
+                                )}
                             </span>
                             <MoreHorizontal className="w-5 h-5 text-cyan-200/70 hover:text-cyan-400 cursor-pointer transition-colors" />
                         </div>
 
                         <div className="flex-1 relative bg-black/50">
-                            {/* Main video stream */}
-                            <VideoBox className="w-full h-full" isPaused={!isLive} />
+                            {/* Main video stream or Low Bandwidth View */}
+                            {lowBandwidthMode ? (
+                                <LowBandwidthView className="w-full h-full" isPaused={!isLive} />
+                            ) : (
+                                <VideoBox className="w-full h-full" isPaused={!isLive} />
+                            )}
 
-                            {/* Grid Overlay Effect */}
-                            <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.03)_1px,transparent_1px)] bg-[size:100px_100px] pointer-events-none"></div>
+                            {/* Grid Overlay Effect - only show for video mode */}
+                            {!lowBandwidthMode && (
+                                <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.03)_1px,transparent_1px)] bg-[size:100px_100px] pointer-events-none"></div>
+                            )}
 
                             {/* Corner brackets */}
                             <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-cyan-500/50 rounded-tl-lg"></div>

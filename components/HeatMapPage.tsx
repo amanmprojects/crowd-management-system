@@ -10,7 +10,9 @@ import {
     LayoutDashboard,
     Map,
     Bell,
-    Settings
+    Settings,
+    BarChart3,
+    FileText
 } from 'lucide-react';
 import HeatMapVisualization from './HeatMap';
 import EmergencyButton from './EmergencyButton';
@@ -55,6 +57,18 @@ export default function HeatMapPage({ user }: { user?: any }) {
                     <Link href="/heatmap" className="flex items-center gap-2 px-4 py-2 rounded-lg text-cyan-400 bg-cyan-500/10 border border-cyan-500/30">
                         <Map className="w-4 h-4" />
                         <span className="text-sm">Heat Map</span>
+                    </Link>
+                    <Link href="/analysis" className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
+                        <BarChart3 className="w-4 h-4" />
+                        <span className="text-sm">Analysis</span>
+                    </Link>
+                    <Link href="/reports" className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
+                        <FileText className="w-4 h-4" />
+                        <span className="text-sm">Reports</span>
+                    </Link>
+                    <Link href="/settings" className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
+                        <Settings className="w-4 h-4" />
+                        <span className="text-sm">Settings</span>
                     </Link>
                 </nav>
 

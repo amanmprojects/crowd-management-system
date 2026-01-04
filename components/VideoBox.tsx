@@ -1,7 +1,7 @@
 // Gets the video stream from localhost:8000/stream-with-boxes and displays it in a box
 'use client';
 
-import { Pause, VideoOff } from 'lucide-react';
+import { Pause, VideoOff, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 interface VideoBoxProps {
@@ -10,19 +10,58 @@ interface VideoBoxProps {
 }
 
 function VideoBox({ className = "", isPaused = false }: VideoBoxProps) {
-    // Using MJPEG stream directly in img tag
-    // Port 8000 is used by the python server, but get from env variables
-    const streamUrl = (process.env.NEXT_PUBLIC_PYTHON_SERVER_URL || 'http://localhost:8000') + '/stream-with-boxes';
     const imgRef = useRef<HTMLImageElement>(null);
     const [hasError, setHasError] = useState(false);
-    const [key, setKey] = useState<number | null>(null); // Initialize as null to prevent hydration mismatch
+    const [key, setKey] = useState<number | null>(null);
     const [isMounted, setIsMounted] = useState(false);
+    const [privacyMaskingEnabled, setPrivacyMaskingEnabled] = useState(false);
 
-    // Set initial key only on client after mount
+    // Build stream URL based on privacy masking setting
+    const baseUrl = process.env.NEXT_PUBLIC_PYTHON_SERVER_URL || 'http://localhost:8000';
+    const streamUrl = privacyMaskingEnabled 
+        ? `${baseUrl}/stream-with-privacy`
+        : `${baseUrl}/stream-with-boxes`;
+
+    // Load privacy masking setting from localStorage
     useEffect(() => {
         setIsMounted(true);
         setKey(Date.now());
+        
+        // Load settings
+        try {
+            const savedSettings = localStorage.getItem('crowdkavach_settings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                setPrivacyMaskingEnabled(settings.privacyMaskingEnabled || false);
+            }
+        } catch (error) {
+            console.error('Error loading privacy settings:', error);
+        }
+
+        // Listen for storage changes (when settings are updated)
+        const handleStorageChange = () => {
+            try {
+                const savedSettings = localStorage.getItem('crowdkavach_settings');
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    setPrivacyMaskingEnabled(settings.privacyMaskingEnabled || false);
+                }
+            } catch (error) {
+                console.error('Error loading privacy settings:', error);
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
+
+    // Reload stream when privacy setting changes
+    useEffect(() => {
+        if (isMounted) {
+            setKey(Date.now());
+            setHasError(false);
+        }
+    }, [privacyMaskingEnabled, isMounted]);
 
     // Handle stream resumption by forcing a reload
     useEffect(() => {
@@ -51,14 +90,23 @@ function VideoBox({ className = "", isPaused = false }: VideoBoxProps) {
                     <div className="text-cyan-500/50 text-sm">Initializing stream...</div>
                 </div>
             ) : !hasError ? (
-                <img
-                    key={key}
-                    ref={imgRef}
-                    src={`${streamUrl}?t=${key}`}
-                    alt="Live Video Stream"
-                    className={`w-full h-full object-contain ${isPaused ? 'opacity-50' : ''}`}
-                    onError={() => setHasError(true)}
-                />
+                <>
+                    <img
+                        key={key}
+                        ref={imgRef}
+                        src={`${streamUrl}?t=${key}`}
+                        alt="Live Video Stream"
+                        className={`w-full h-full object-contain ${isPaused ? 'opacity-50' : ''}`}
+                        onError={() => setHasError(true)}
+                    />
+                    {/* Privacy Mode Indicator */}
+                    {privacyMaskingEnabled && (
+                        <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 bg-purple-500/20 rounded-full border border-purple-500/30">
+                            <ShieldCheck className="w-3 h-3 text-purple-400" />
+                            <span className="text-[10px] text-purple-400 font-bold">PRIVACY</span>
+                        </div>
+                    )}
+                </>
             ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                     <VideoOff className="w-12 h-12 text-cyan-500/30" />

@@ -13,16 +13,14 @@ export default function Home() {
               <div className="absolute inset-0 bg-cyan-400/20 blur-xl rounded-full"></div>
             </div>
             <span className="text-xl font-bold tracking-wider text-white">
-              SENTINEL <span className="text-cyan-400">AI</span>
+              CROWD<span className="text-cyan-400">KAVACH</span>
             </span>
           </div>
 
           <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm text-cyan-100/70 hover:text-cyan-400 transition-colors">Features</a>
-            <a href="#about" className="text-sm text-cyan-100/70 hover:text-cyan-400 transition-colors">Technology</a>
-            <Link href="/dashboard" className="px-5 py-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-500/60 transition-all duration-300 backdrop-blur-sm">
-              Access Dashboard
-            </Link>
+            <a href="/api/auth/login" className="px-5 py-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-500/60 transition-all duration-300 backdrop-blur-sm">
+              Login
+            </a>
           </div>
         </div>
       </nav>
@@ -50,16 +48,13 @@ export default function Home() {
             </h1>
 
             <p className="text-lg text-slate-400 max-w-xl leading-relaxed">
-              Sentinel AI deploys next-generation computer vision to provide real-time crowd analytics, anomaly detection, and automated safety protocols for public spaces.
+              CrowdKavach deploys next-generation computer vision to provide real-time crowd analytics, anomaly detection, and automated safety protocols for public spaces.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <Link href="/dashboard" className="px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-lg transition-all duration-300 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] flex items-center justify-center gap-2 group">
+              <a href="/api/auth/login" className="px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-lg transition-all duration-300 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] flex items-center justify-center gap-2 group">
                 Launch Console
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </Link>
-              <a href="#demo" className="px-8 py-4 bg-[#0f1729] hover:bg-[#1a2333] text-white rounded-lg border border-slate-700 hover:border-cyan-500/30 transition-all duration-300 flex items-center justify-center gap-2">
-                View Documentation
               </a>
             </div>
 

@@ -1,5 +1,6 @@
 import os
 import cv2
+import numpy as np
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ import threading
 import time
 import base64
 from ultralytics import YOLO
+from pydantic import BaseModel
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
@@ -18,31 +20,50 @@ DROIDCAM_URL = os.getenv("DROIDCAM_URL") + "/video"
 # Global variable to store the latest frame
 current_frame = None
 frame_lock = threading.Lock()
+reconnect_event = threading.Event()
 
 # Load YOLO model
 model = YOLO("yolov8n.pt")
 
+# Load face detection cascade
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
 def capture_loop():
     """Background thread to continuously capture frames from DroidCam"""
-    global current_frame
-    print(f"Connecting to DroidCam at {DROIDCAM_URL}...")
-    cap = cv2.VideoCapture(DROIDCAM_URL)
-    
-    # Retry every 5 seconds until connection is established
-    for i in range(3):
-        if cap.isOpened():
-            print("Connected to DroidCam!")
-            break
-        time.sleep(5)
-        cap = cv2.VideoCapture(DROIDCAM_URL)
+    global current_frame, DROIDCAM_URL
     
     while True:
-        ret, frame = cap.read()
-        if ret:
-            with frame_lock:
-                current_frame = frame
-        else:
-            time.sleep(0.1)
+        print(f"Connecting to DroidCam at {DROIDCAM_URL}...")
+        cap = cv2.VideoCapture(DROIDCAM_URL)
+        
+        # Retry logic if initial connection fails
+        if not cap.isOpened():
+            print("Failed to open camera, retrying in 5s...")
+            time.sleep(5)
+            continue
+            
+        print("Connected to DroidCam!")
+    
+        while cap.isOpened():
+            # Check for reconnection request
+            if reconnect_event.is_set():
+                print("Reconnection requested - closing current connection...")
+                reconnect_event.clear()
+                break
+
+            ret, frame = cap.read()
+            if ret:
+                with frame_lock:
+                    current_frame = frame
+            else:
+                print("Stream disconnected or frame read failed")
+                break
+            
+            # Small sleep to prevent tight loop if needed, though read() blocks usually
+            # time.sleep(0.001) 
+        
+        cap.release()
+        time.sleep(1) # Wait a bit before reconnecting
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -61,6 +82,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class CameraConfig(BaseModel):
+    url: str
+
+@app.get("/config/camera")
+def get_camera_config():
+    """Get current camera configuration"""
+    return {"url": DROIDCAM_URL}
+
+@app.post("/config/camera")
+def update_camera_config(config: CameraConfig):
+    """Update camera URL and trigger reconnection"""
+    global DROIDCAM_URL
+    DROIDCAM_URL = config.url
+    reconnect_event.set()
+    return {"status": "updated", "url": DROIDCAM_URL}
 
 @app.get("/get-frame")
 def get_frame():
@@ -336,7 +373,141 @@ def generate_stream_with_boxes():
         time.sleep(0.033)  # ~30 fps
 
 
+def blur_faces(frame):
+    """Apply blur to detected faces in the frame"""
+    try:
+        if face_cascade is None or face_cascade.empty():
+            return frame, 0
+        
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        
+        for (x, y, w, h) in faces:
+            # Ensure coordinates are within frame bounds
+            x = max(0, x)
+            y = max(0, y)
+            w = min(w, frame.shape[1] - x)
+            h = min(h, frame.shape[0] - y)
+            
+            if w > 0 and h > 0:
+                # Extract face region
+                face_region = frame[y:y+h, x:x+w]
+                if face_region.size > 0:
+                    # Apply strong Gaussian blur
+                    blur_size = min(99, max(21, (w // 2) * 2 + 1))  # Ensure odd number
+                    blurred_face = cv2.GaussianBlur(face_region, (blur_size, blur_size), 30)
+                    # Replace face region with blurred version
+                    frame[y:y+h, x:x+w] = blurred_face
+        
+        return frame, len(faces)
+    except Exception as e:
+        print(f"Error in blur_faces: {e}")
+        return frame, 0
+
+
+def blur_upper_body(frame, bounding_boxes):
+    """Blur upper portion of detected person bounding boxes (head/face area)"""
+    try:
+        faces_blurred = 0
+        frame_height, frame_width = frame.shape[:2]
+        
+        for box in bounding_boxes:
+            x1, y1, x2, y2 = box['x1'], box['y1'], box['x2'], box['y2']
+            # Calculate upper 30% of bounding box (head region)
+            head_height = int((y2 - y1) * 0.3)
+            head_y2 = y1 + head_height
+            
+            # Ensure coordinates are within frame bounds
+            x1 = max(0, min(x1, frame_width - 1))
+            y1 = max(0, min(y1, frame_height - 1))
+            x2 = max(0, min(x2, frame_width))
+            head_y2 = max(0, min(head_y2, frame_height))
+            
+            width = x2 - x1
+            height = head_y2 - y1
+            
+            if height > 0 and width > 0:
+                # Extract head region
+                head_region = frame[y1:head_y2, x1:x2]
+                if head_region.size > 0:
+                    # Apply pixelation effect (resize down then up)
+                    try:
+                        small = cv2.resize(head_region, (max(1, 8), max(1, 8)), interpolation=cv2.INTER_LINEAR)
+                        pixelated = cv2.resize(small, (width, height), interpolation=cv2.INTER_NEAREST)
+                        frame[y1:head_y2, x1:x2] = pixelated
+                        faces_blurred += 1
+                    except Exception as resize_error:
+                        print(f"Resize error: {resize_error}")
+        
+        return frame, faces_blurred
+    except Exception as e:
+        print(f"Error in blur_upper_body: {e}")
+        return frame, 0
+
+
+@app.get("/stream-with-privacy")
+def stream_with_privacy():
+    """Return MJPEG video stream with privacy masking (face blur) and bounding boxes"""
+    return StreamingResponse(
+        generate_stream_with_privacy(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+def generate_stream_with_privacy():
+    """Generator function for MJPEG streaming with privacy masking"""
+    while True:
+        try:
+            with frame_lock:
+                if current_frame is None:
+                    time.sleep(0.1)
+                    continue
+                frame = current_frame.copy()
+
+            # Run YOLO detection
+            results = model(frame, verbose=False)
+            
+            # Extract person detections
+            bounding_boxes = []
+            for result in results:
+                for box in result.boxes:
+                    if int(box.cls[0]) == 0:  # person class
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        confidence = float(box.conf[0])
+                        bounding_boxes.append({
+                            "x1": int(x1),
+                            "y1": int(y1),
+                            "x2": int(x2),
+                            "y2": int(y2),
+                            "confidence": round(confidence, 3)
+                        })
+            
+            # Apply privacy masking - blur upper body/head region of each detected person
+            frame, faces_blurred = blur_upper_body(frame, bounding_boxes)
+            
+            # Also try to detect and blur any faces that YOLO might have missed
+            frame, additional_faces = blur_faces(frame)
+            
+            # Draw bounding boxes
+            for box in bounding_boxes:
+                x1, y1, x2, y2 = box['x1'], box['y1'], box['x2'], box['y2']
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+            # Put text on the frame
+            cv2.putText(frame, f"Persons: {len(bounding_boxes)}", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(frame, "PRIVACY MODE", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
+
+            # Encode frame as JPEG
+            _, jpeg = cv2.imencode('.jpg', frame)
+
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+            time.sleep(0.033)  # ~30 fps
+        except Exception as e:
+            print(f"Error in privacy stream: {e}")
+            time.sleep(0.1)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
