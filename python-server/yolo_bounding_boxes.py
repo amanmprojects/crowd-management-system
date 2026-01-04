@@ -190,6 +190,78 @@ def analytics():
     })
 
 
+# Define zones for coordinate mapping
+ZONES = [
+    {"id": "entry", "name": "Entry Gate", "x_range": (0, 20), "y_range": (40, 60)},
+    {"id": "main", "name": "Main Plaza", "x_range": (20, 70), "y_range": (20, 70)},
+    {"id": "stage", "name": "Stage Area", "x_range": (20, 70), "y_range": (0, 25)},
+    {"id": "food", "name": "Food Court", "x_range": (70, 100), "y_range": (20, 55)},
+    {"id": "exit", "name": "Exit Gate", "x_range": (70, 100), "y_range": (60, 90)},
+    {"id": "parking", "name": "Parking", "x_range": (0, 30), "y_range": (70, 100)},
+    {"id": "vip", "name": "VIP Area", "x_range": (70, 100), "y_range": (0, 25)},
+]
+
+
+def get_zone_for_position(x_percent, y_percent):
+    """Determine which zone a position falls into"""
+    for zone in ZONES:
+        x_min, x_max = zone["x_range"]
+        y_min, y_max = zone["y_range"]
+        if x_min <= x_percent <= x_max and y_min <= y_percent <= y_max:
+            return zone["name"]
+    return "Main Plaza"  # Default zone
+
+
+@app.get("/coordinates")
+def coordinates():
+    """Return lightweight coordinate data for low-bandwidth mode (no image data)"""
+    with frame_lock:
+        if current_frame is None:
+            return JSONResponse(content={"error": "No frame available"}, status_code=503)
+        
+        frame = current_frame.copy()
+    
+    # Get frame dimensions for percentage calculations
+    frame_height, frame_width = frame.shape[:2]
+    
+    # Run YOLO detection
+    results = model(frame, verbose=False)
+    
+    # Extract person coordinates as percentages
+    people = []
+    person_id = 1
+    for result in results:
+        for box in result.boxes:
+            if int(box.cls[0]) == 0:  # person class
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                # Calculate center point as percentage of frame
+                center_x = ((x1 + x2) / 2) / frame_width * 100
+                center_y = ((y1 + y2) / 2) / frame_height * 100
+                
+                # Determine zone
+                zone = get_zone_for_position(center_x, center_y)
+                
+                people.append({
+                    "id": person_id,
+                    "x": round(center_x, 1),
+                    "y": round(center_y, 1),
+                    "zone": zone
+                })
+                person_id += 1
+    
+    # Calculate density
+    frame_area = frame_height * frame_width
+    max_capacity = frame_area / 10000
+    density_percentage = min(100, int((len(people) / max_capacity) * 100)) if max_capacity > 0 else 0
+    
+    return JSONResponse(content={
+        "timestamp": int(time.time() * 1000),  # milliseconds
+        "people": people,
+        "count": len(people),
+        "density": density_percentage
+    })
+
+
 def generate_stream():
     """Generator function for MJPEG streaming"""
     while True:
