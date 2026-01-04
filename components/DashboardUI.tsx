@@ -29,9 +29,11 @@ import {
     Map,
     BarChart3,
     FileText,
-    WifiOff
+    WifiOff,
+    Video,
+    Plus
 } from 'lucide-react';
-import { AppUser } from '@/lib/types';
+import { AppUser, Camera } from '@/lib/types';
 
 // Alert types and interface
 interface Alert {
@@ -91,8 +93,11 @@ export default function DashboardUI({ user }: { user?: AppUser }) {
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [isMainFeedExpanded, setIsMainFeedExpanded] = useState(false);
     const [lowBandwidthMode, setLowBandwidthMode] = useState(false);
+    const [cameras, setCameras] = useState<Camera[]>([]);
+    const [selectedCameraId, setSelectedCameraId] = useState<string | undefined>(undefined);
 
     const currentDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+    const baseUrl = process.env.NEXT_PUBLIC_PYTHON_SERVER_URL || 'http://localhost:8000';
 
     // Load settings from localStorage
     useEffect(() => {
@@ -106,6 +111,30 @@ export default function DashboardUI({ user }: { user?: AppUser }) {
             console.error('Error loading settings:', error);
         }
     }, []);
+
+    // Fetch cameras list
+    useEffect(() => {
+        const fetchCameras = async () => {
+            try {
+                const response = await fetch(`${baseUrl}/cameras`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setCameras(data.cameras || []);
+                    // Set first camera as selected if none selected
+                    if (data.cameras?.length > 0 && !selectedCameraId) {
+                        setSelectedCameraId(data.cameras[0].id);
+                    }
+                }
+            } catch (error) {
+                console.log('Failed to fetch cameras:', error);
+            }
+        };
+
+        fetchCameras();
+        // Refresh camera list every 10 seconds
+        const interval = setInterval(fetchCameras, 10000);
+        return () => clearInterval(interval);
+    }, [baseUrl, selectedCameraId]);
 
     // Update current time every second
     useEffect(() => {
@@ -126,13 +155,21 @@ export default function DashboardUI({ user }: { user?: AppUser }) {
 
         const fetchAnalytics = async () => {
             try {
-                const response = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_SERVER_URL || 'http://localhost:8000'}/analytics`);
+                // If we have multiple cameras, fetch aggregated analytics
+                const endpoint = cameras.length > 1 ? '/analytics/all' : `/analytics${selectedCameraId ? `?camera_id=${selectedCameraId}` : ''}`;
+                const response = await fetch(`${baseUrl}${endpoint}`);
                 if (response.ok) {
                     const data = await response.json();
-                    setPeopleCount(data.people_count || 0);
-                    setDensity(data.density || 0);
-                    // Update charts based on real data
-                    setFootfallData(generateFootfallData(data.people_count || 50));
+                    if (cameras.length > 1 && data.total_people_count !== undefined) {
+                        setPeopleCount(data.total_people_count);
+                        // Calculate average density across cameras
+                        const avgDensity = data.cameras?.reduce((sum: number, cam: { density: number }) => sum + cam.density, 0) / (data.cameras?.length || 1);
+                        setDensity(Math.round(avgDensity) || 0);
+                    } else {
+                        setPeopleCount(data.people_count || 0);
+                        setDensity(data.density || 0);
+                    }
+                    setFootfallData(generateFootfallData(data.people_count || data.total_people_count || 50));
                 }
             } catch (error) {
                 console.log('Using mock data');
@@ -148,7 +185,7 @@ export default function DashboardUI({ user }: { user?: AppUser }) {
         const interval = setInterval(fetchAnalytics, 2000); // Update every 2 seconds
 
         return () => clearInterval(interval);
-    }, [isLive]);
+    }, [isLive, cameras.length, selectedCameraId, baseUrl]);
 
     // Update dwell time data periodically
     useEffect(() => {
@@ -350,7 +387,9 @@ export default function DashboardUI({ user }: { user?: AppUser }) {
                                             LOW BANDWIDTH MODE (EXPANDED)
                                         </>
                                     ) : (
-                                        'CAM 1: MAIN PLAZA - LIVE (EXPANDED)'
+                                        <>
+                                            {cameras.find(c => c.id === selectedCameraId)?.name?.toUpperCase() || 'MAIN CAMERA'} - EXPANDED
+                                        </>
                                     )}
                                 </span>
                                 <button
@@ -366,7 +405,7 @@ export default function DashboardUI({ user }: { user?: AppUser }) {
                                 {lowBandwidthMode ? (
                                     <LowBandwidthView className="w-full h-full" isPaused={!isLive} />
                                 ) : (
-                                    <VideoBox className="w-full h-full" isPaused={!isLive} />
+                                    <VideoBox className="w-full h-full" isPaused={!isLive} cameraId={selectedCameraId} />
                                 )}
 
                                 {/* Corner brackets */}
@@ -395,23 +434,52 @@ export default function DashboardUI({ user }: { user?: AppUser }) {
                     <>
                         {/* Left Sidebar - Small Feeds */}
                         <div className="col-span-3 flex flex-col gap-4 h-full overflow-y-auto pr-1 custom-scrollbar">
-                            {[1, 2, 3].map((i) => (
-                                <div key={i} className="group relative bg-[#0f1729] rounded-lg border border-cyan-900/30 overflow-hidden shadow-[0_0_15px_rgba(0,229,255,0.05)] hover:border-cyan-500/50 transition-all duration-300">
-                                    <div className="absolute top-0 left-0 right-0 p-2 flex justify-between items-start z-10 bg-gradient-to-b from-black/80 to-transparent">
-                                        <span className="text-[10px] font-bold text-cyan-400 tracking-wider flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                            CAM 1: MAIN PLAZA - LIVE
-                                        </span>
-                                        <MoreHorizontal className="w-4 h-4 text-gray-400 opacity-60 group-hover:opacity-100 cursor-pointer" />
-                                    </div>
-                                    <div className="aspect-video w-full opacity-80 group-hover:opacity-100 transition-opacity relative">
-                                        {/* Placeholder for small feeds - in a real app these would be different streams */}
-                                        <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
-                                            <VideoBox className="w-full h-full opacity-60 grayscale hover:grayscale-0 transition-all duration-500" isPaused={!isLive} />
+                            {cameras.length > 0 ? (
+                                cameras.slice(0, 4).map((camera) => (
+                                    <div 
+                                        key={camera.id} 
+                                        className={`group relative bg-[#0f1729] rounded-lg border overflow-hidden shadow-[0_0_15px_rgba(0,229,255,0.05)] hover:border-cyan-500/50 transition-all duration-300 cursor-pointer ${selectedCameraId === camera.id ? 'border-cyan-500/50 ring-1 ring-cyan-500/30' : 'border-cyan-900/30'}`}
+                                        onClick={() => setSelectedCameraId(camera.id)}
+                                    >
+                                        <div className="absolute top-0 left-0 right-0 p-2 flex justify-between items-start z-10 bg-gradient-to-b from-black/80 to-transparent">
+                                            <span className="text-[10px] font-bold text-cyan-400 tracking-wider flex items-center gap-2">
+                                                <span className={`w-1.5 h-1.5 rounded-full ${camera.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+                                                {camera.name.toUpperCase()} - {camera.status === 'online' ? 'LIVE' : 'OFFLINE'}
+                                            </span>
+                                            <MoreHorizontal className="w-4 h-4 text-gray-400 opacity-60 group-hover:opacity-100 cursor-pointer" />
+                                        </div>
+                                        <div className="aspect-video w-full opacity-80 group-hover:opacity-100 transition-opacity relative">
+                                            <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
+                                                <VideoBox 
+                                                    className={`w-full h-full ${selectedCameraId === camera.id ? '' : 'opacity-60 grayscale hover:grayscale-0'} transition-all duration-500`} 
+                                                    isPaused={!isLive} 
+                                                    cameraId={camera.id}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))
+                            ) : (
+                                // Fallback to placeholder if no cameras configured
+                                [1, 2, 3].map((i) => (
+                                    <div key={i} className="group relative bg-[#0f1729] rounded-lg border border-cyan-900/30 overflow-hidden shadow-[0_0_15px_rgba(0,229,255,0.05)] hover:border-cyan-500/50 transition-all duration-300">
+                                        <div className="absolute top-0 left-0 right-0 p-2 flex justify-between items-start z-10 bg-gradient-to-b from-black/80 to-transparent">
+                                            <span className="text-[10px] font-bold text-cyan-400 tracking-wider flex items-center gap-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+                                                NO CAMERA CONFIGURED
+                                            </span>
+                                        </div>
+                                        <div className="aspect-video w-full flex items-center justify-center bg-slate-900/50">
+                                            <div className="text-center">
+                                                <Video className="w-8 h-8 text-cyan-500/30 mx-auto mb-2" />
+                                                <Link href="/settings" className="text-xs text-cyan-500/50 hover:text-cyan-400">
+                                                    Add Camera
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
 
                         {/* Center - Main Feed */}
@@ -426,7 +494,9 @@ export default function DashboardUI({ user }: { user?: AppUser }) {
                                                 LOW BANDWIDTH MODE
                                             </>
                                         ) : (
-                                            'CAM 1: MAIN PLAZA - LIVE'
+                                            <>
+                                                {cameras.find(c => c.id === selectedCameraId)?.name?.toUpperCase() || 'MAIN CAMERA'} - {cameras.find(c => c.id === selectedCameraId)?.zone?.toUpperCase() || 'LIVE'}
+                                            </>
                                         )}
                                     </span>
                                     <MoreHorizontal className="w-5 h-5 text-cyan-200/70 hover:text-cyan-400 cursor-pointer transition-colors" />
@@ -437,7 +507,7 @@ export default function DashboardUI({ user }: { user?: AppUser }) {
                                     {lowBandwidthMode ? (
                                         <LowBandwidthView className="w-full h-full" isPaused={!isLive} />
                                     ) : (
-                                        <VideoBox className="w-full h-full" isPaused={!isLive} />
+                                        <VideoBox className="w-full h-full" isPaused={!isLive} cameraId={selectedCameraId} />
                                     )}
 
                                     {/* Grid Overlay Effect - only show for video mode */}

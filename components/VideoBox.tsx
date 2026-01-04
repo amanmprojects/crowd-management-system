@@ -7,20 +7,29 @@ import { useEffect, useRef, useState } from 'react';
 interface VideoBoxProps {
     className?: string;
     isPaused?: boolean;
+    cameraId?: string;
+    showLabel?: boolean;
+    cameraName?: string;
 }
 
-function VideoBox({ className = "", isPaused = false }: VideoBoxProps) {
+function VideoBox({ className = "", isPaused = false, cameraId, showLabel = false, cameraName }: VideoBoxProps) {
     const imgRef = useRef<HTMLImageElement>(null);
     const [hasError, setHasError] = useState(false);
     const [key, setKey] = useState<number | null>(null);
     const [isMounted, setIsMounted] = useState(false);
     const [privacyMaskingEnabled, setPrivacyMaskingEnabled] = useState(false);
 
-    // Build stream URL based on privacy masking setting
+    // Build stream URL based on privacy masking setting and camera ID
     const baseUrl = process.env.NEXT_PUBLIC_PYTHON_SERVER_URL || 'http://localhost:8000';
-    const streamUrl = privacyMaskingEnabled 
-        ? `${baseUrl}/stream-with-privacy`
-        : `${baseUrl}/stream-with-boxes`;
+    const streamEndpoint = privacyMaskingEnabled ? 'stream-with-privacy' : 'stream-with-boxes';
+    // Build query params properly
+    const buildStreamUrl = (timestamp: number | null) => {
+        const params = new URLSearchParams();
+        if (cameraId) params.set('camera_id', cameraId);
+        if (timestamp) params.set('t', String(timestamp));
+        const queryString = params.toString();
+        return `${baseUrl}/${streamEndpoint}${queryString ? `?${queryString}` : ''}`;
+    };
 
     // Load privacy masking setting from localStorage
     useEffect(() => {
@@ -55,13 +64,13 @@ function VideoBox({ className = "", isPaused = false }: VideoBoxProps) {
         return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 
-    // Reload stream when privacy setting changes
+    // Reload stream when privacy setting or cameraId changes
     useEffect(() => {
         if (isMounted) {
             setKey(Date.now());
             setHasError(false);
         }
-    }, [privacyMaskingEnabled, isMounted]);
+    }, [privacyMaskingEnabled, isMounted, cameraId]);
 
     // Handle stream resumption by forcing a reload
     useEffect(() => {
@@ -94,7 +103,7 @@ function VideoBox({ className = "", isPaused = false }: VideoBoxProps) {
                     <img
                         key={key}
                         ref={imgRef}
-                        src={`${streamUrl}?t=${key}`}
+                        src={buildStreamUrl(key)}
                         alt="Live Video Stream"
                         className={`w-full h-full object-contain ${isPaused ? 'opacity-50' : ''}`}
                         onError={() => setHasError(true)}

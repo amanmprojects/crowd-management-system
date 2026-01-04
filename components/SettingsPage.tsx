@@ -23,10 +23,15 @@ import {
     RotateCcw,
     Check,
     Info,
-    Video
+    Video,
+    Plus,
+    Trash2,
+    Edit2,
+    X,
+    RefreshCw
 } from 'lucide-react';
 import EmergencyButton from './EmergencyButton';
-import { AppUser } from '@/lib/types';
+import { AppUser, Camera } from '@/lib/types';
 
 interface SettingsData {
     lowBandwidthMode: boolean;
@@ -35,6 +40,13 @@ interface SettingsData {
     showDensityOverlay: boolean;
     alertSoundEnabled: boolean;
     droidCamUrl?: string;
+}
+
+interface NewCameraForm {
+    id: string;
+    name: string;
+    url: string;
+    zone: string;
 }
 
 const defaultSettings: SettingsData = {
@@ -46,14 +58,29 @@ const defaultSettings: SettingsData = {
     droidCamUrl: ''
 };
 
+const defaultNewCamera: NewCameraForm = {
+    id: '',
+    name: '',
+    url: '',
+    zone: 'Main Plaza'
+};
+
+const zones = ['Main Plaza', 'Entry Gate', 'Exit Gate', 'Stage Area', 'Food Court', 'Parking', 'VIP Area'];
+
 export default function SettingsPage({ user }: { user?: AppUser }) {
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false }));
     const [settings, setSettings] = useState<SettingsData>(defaultSettings);
     const [saved, setSaved] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
+    const [cameras, setCameras] = useState<Camera[]>([]);
+    const [showAddCamera, setShowAddCamera] = useState(false);
+    const [newCamera, setNewCamera] = useState<NewCameraForm>(defaultNewCamera);
+    const [editingCameraId, setEditingCameraId] = useState<string | null>(null);
+    const [cameraLoading, setCameraLoading] = useState(false);
 
     const currentDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+    const baseUrl = process.env.NEXT_PUBLIC_PYTHON_SERVER_URL || 'http://localhost:8000';
 
     // Load settings from localStorage
     useEffect(() => {
@@ -66,18 +93,22 @@ export default function SettingsPage({ user }: { user?: AppUser }) {
             }
         }
 
-        // Fetch current camera config from backend
-        // Use logic to determine backend URL (localhost for dev)
-        const baseUrl = process.env.NEXT_PUBLIC_PYTHON_SERVER_URL || 'http://localhost:8000';
-        fetch(`${baseUrl}/config/camera`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.url) {
-                    setSettings(prev => ({ ...prev, droidCamUrl: data.url }));
-                }
-            })
-            .catch(err => console.error('Failed to fetch camera config:', err));
+        // Fetch cameras from backend
+        fetchCameras();
     }, []);
+
+    // Fetch cameras
+    const fetchCameras = async () => {
+        try {
+            const response = await fetch(`${baseUrl}/cameras`);
+            if (response.ok) {
+                const data = await response.json();
+                setCameras(data.cameras || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch cameras:', err);
+        }
+    };
 
     // Update time
     useEffect(() => {
@@ -95,24 +126,86 @@ export default function SettingsPage({ user }: { user?: AppUser }) {
 
     const saveSettings = async () => {
         localStorage.setItem('crowdkavach_settings', JSON.stringify(settings));
-
-        // Save camera config to backend
-        if (settings.droidCamUrl) {
-            try {
-                const baseUrl = process.env.NEXT_PUBLIC_PYTHON_SERVER_URL || 'http://localhost:8000';
-                await fetch(`${baseUrl}/config/camera`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: settings.droidCamUrl })
-                });
-            } catch (e) {
-                console.error('Failed to update camera config', e);
-            }
-        }
-
         setSaved(true);
         setHasChanges(false);
         setTimeout(() => setSaved(false), 3000);
+    };
+
+    // Camera management functions
+    const addCamera = async () => {
+        if (!newCamera.id || !newCamera.name || !newCamera.url) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        setCameraLoading(true);
+        try {
+            const response = await fetch(`${baseUrl}/cameras`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: newCamera.id,
+                    name: newCamera.name,
+                    url: newCamera.url,
+                    zone: newCamera.zone,
+                    enabled: true
+                })
+            });
+
+            if (response.ok) {
+                await fetchCameras();
+                setNewCamera(defaultNewCamera);
+                setShowAddCamera(false);
+            } else {
+                const error = await response.json();
+                alert(error.detail || 'Failed to add camera');
+            }
+        } catch (err) {
+            console.error('Failed to add camera:', err);
+            alert('Failed to add camera');
+        }
+        setCameraLoading(false);
+    };
+
+    const updateCamera = async (cameraId: string, updates: Partial<Camera>) => {
+        setCameraLoading(true);
+        try {
+            const response = await fetch(`${baseUrl}/cameras/${cameraId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+
+            if (response.ok) {
+                await fetchCameras();
+                setEditingCameraId(null);
+            }
+        } catch (err) {
+            console.error('Failed to update camera:', err);
+        }
+        setCameraLoading(false);
+    };
+
+    const deleteCamera = async (cameraId: string) => {
+        if (!confirm('Are you sure you want to delete this camera?')) return;
+
+        setCameraLoading(true);
+        try {
+            const response = await fetch(`${baseUrl}/cameras/${cameraId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                await fetchCameras();
+            }
+        } catch (err) {
+            console.error('Failed to delete camera:', err);
+        }
+        setCameraLoading(false);
+    };
+
+    const toggleCameraEnabled = async (camera: Camera) => {
+        await updateCamera(camera.id, { enabled: !camera.enabled });
     };
 
     const resetSettings = () => {
@@ -243,24 +336,151 @@ export default function SettingsPage({ user }: { user?: AppUser }) {
                     <div className="space-y-6">
                         {/* Camera Configuration */}
                         <div className="bg-[#0a101f] rounded-xl p-6 border border-cyan-900/30">
-                            <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
-                                <Video className="w-5 h-5 text-red-400" />
-                                Camera Configuration
-                            </h3>
-                            <p className="text-sm text-gray-500 mb-6">Manage video source inputs</p>
-
-                            <div className="flex flex-col gap-2 p-4 bg-[#0f1729] rounded-lg border border-cyan-900/20">
-                                <label className="text-sm font-medium text-white">DroidCam URL (IP Camera)</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={settings.droidCamUrl || ''}
-                                        onChange={(e) => updateSetting('droidCamUrl', e.target.value)}
-                                        placeholder="http://192.168.x.x:4747"
-                                        className="flex-1 bg-[#0a101f] border border-cyan-900/30 rounded-lg px-4 py-2 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500/50"
-                                    />
+                            <div className="flex items-center justify-between mb-1">
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                    <Video className="w-5 h-5 text-red-400" />
+                                    Camera Configuration
+                                </h3>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={fetchCameras}
+                                        className="p-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors"
+                                        title="Refresh cameras"
+                                    >
+                                        <RefreshCw className={`w-4 h-4 ${cameraLoading ? 'animate-spin' : ''}`} />
+                                    </button>
+                                    <button
+                                        onClick={() => setShowAddCamera(true)}
+                                        className="flex items-center gap-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg border border-cyan-500/30 hover:bg-cyan-500/30 transition-colors"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Add Camera
+                                    </button>
                                 </div>
-                                <p className="text-xs text-gray-500">Provide the full URL including protocol and port (e.g., http://192.168.1.100:4747)</p>
+                            </div>
+                            <p className="text-sm text-gray-500 mb-6">Manage video source inputs for crowd monitoring</p>
+
+                            {/* Add Camera Form */}
+                            {showAddCamera && (
+                                <div className="mb-6 p-4 bg-[#0f1729] rounded-lg border border-cyan-500/30">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h4 className="font-medium text-white">Add New Camera</h4>
+                                        <button
+                                            onClick={() => {
+                                                setShowAddCamera(false);
+                                                setNewCamera(defaultNewCamera);
+                                            }}
+                                            className="text-gray-400 hover:text-white"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs text-gray-400 mb-1 block">Camera ID *</label>
+                                            <input
+                                                type="text"
+                                                value={newCamera.id}
+                                                onChange={(e) => setNewCamera({ ...newCamera, id: e.target.value })}
+                                                placeholder="cam-1"
+                                                className="w-full bg-[#0a101f] border border-cyan-900/30 rounded-lg px-3 py-2 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500/50"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-400 mb-1 block">Camera Name *</label>
+                                            <input
+                                                type="text"
+                                                value={newCamera.name}
+                                                onChange={(e) => setNewCamera({ ...newCamera, name: e.target.value })}
+                                                placeholder="Main Plaza Camera"
+                                                className="w-full bg-[#0a101f] border border-cyan-900/30 rounded-lg px-3 py-2 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500/50"
+                                            />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="text-xs text-gray-400 mb-1 block">Stream URL *</label>
+                                            <input
+                                                type="text"
+                                                value={newCamera.url}
+                                                onChange={(e) => setNewCamera({ ...newCamera, url: e.target.value })}
+                                                placeholder="http://192.168.1.100:4747/video"
+                                                className="w-full bg-[#0a101f] border border-cyan-900/30 rounded-lg px-3 py-2 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500/50"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-400 mb-1 block">Zone</label>
+                                            <select
+                                                value={newCamera.zone}
+                                                onChange={(e) => setNewCamera({ ...newCamera, zone: e.target.value })}
+                                                className="w-full bg-[#0a101f] border border-cyan-900/30 rounded-lg px-3 py-2 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500/50"
+                                            >
+                                                {zones.map(zone => (
+                                                    <option key={zone} value={zone}>{zone}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex items-end">
+                                            <button
+                                                onClick={addCamera}
+                                                disabled={cameraLoading}
+                                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-cyan-500 text-black rounded-lg hover:bg-cyan-400 transition-colors disabled:opacity-50"
+                                            >
+                                                {cameraLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                                                Add Camera
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Camera List */}
+                            <div className="space-y-3">
+                                {cameras.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500">
+                                        <Video className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                                        <p>No cameras configured</p>
+                                        <p className="text-sm">Click &quot;Add Camera&quot; to get started</p>
+                                    </div>
+                                ) : (
+                                    cameras.map((camera) => (
+                                        <div
+                                            key={camera.id}
+                                            className={`flex items-center gap-4 p-4 bg-[#0f1729] rounded-lg border transition-colors ${camera.enabled ? 'border-cyan-900/20' : 'border-gray-700/30 opacity-60'
+                                                }`}
+                                        >
+                                            <div className={`w-3 h-3 rounded-full ${camera.status === 'online' ? 'bg-emerald-500' : camera.status === 'offline' ? 'bg-red-500' : 'bg-gray-500'
+                                                }`}></div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-white">{camera.name}</span>
+                                                    <span className="text-xs text-cyan-500/70 bg-cyan-500/10 px-2 py-0.5 rounded">{camera.zone}</span>
+                                                    <span className={`text-xs px-2 py-0.5 rounded ${camera.status === 'online' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                                                        }`}>
+                                                        {camera.status || 'unknown'}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-gray-500 truncate mt-1">{camera.url}</div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => toggleCameraEnabled(camera)}
+                                                    className={`relative w-10 h-5 rounded-full transition-colors ${camera.enabled ? 'bg-cyan-500' : 'bg-gray-600'
+                                                        }`}
+                                                    title={camera.enabled ? 'Disable camera' : 'Enable camera'}
+                                                >
+                                                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${camera.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                                                        }`}></div>
+                                                </button>
+                                                <button
+                                                    onClick={() => deleteCamera(camera.id)}
+                                                    className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                    title="Delete camera"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
 
